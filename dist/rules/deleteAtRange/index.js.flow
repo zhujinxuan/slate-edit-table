@@ -1,0 +1,54 @@
+// @flow
+import { type Change, type Range } from 'slate';
+import inSameCell from './inSameCell';
+import type Options from '../../options';
+
+type typeRules = Array<(Options, Change, Range, () => Change) => Change>;
+const deleteAtRangeRules: typeRules = [inSameCell];
+
+function bindRules(
+    rules: typeRules,
+    index: number,
+    opts: Options,
+    change: Change,
+    range: Range
+): Change {
+    if (index === rules.length) {
+        return change.deleteAtRange(range);
+    }
+    const rule = rules[index];
+    const next = () => bindRules(rules, index + 1, opts, change, range);
+    return rule(opts, change, range, next);
+}
+
+type typeRule = (Change, Range, () => Change) => Change;
+function convertSingleRule(
+    opts: Options,
+    optsRule: (Options, Change, Range, () => Change) => Change
+): typeRule {
+    return (change: Change, range: Range, next: () => Document) =>
+        optsRule(opts, change, range, next);
+}
+
+type typePatch = {
+    rules: {
+        deleteAtRange: Array<typeRule>
+    },
+    changes: { deleteAtRange: (Change, Range) => Change }
+};
+
+function makePatch(opts: Options): typePatch {
+    return {
+        rules: {
+            deleteAtRange: deleteAtRangeRules.map(rule =>
+                convertSingleRule(opts, rule)
+            )
+        },
+        changes: {
+            deleteAtRange: (change: Change, range: Range) =>
+                bindRules(deleteAtRangeRules, 0, opts, change, range)
+        }
+    };
+}
+
+export default makePatch;

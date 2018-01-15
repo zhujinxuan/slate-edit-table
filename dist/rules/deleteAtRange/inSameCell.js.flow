@@ -1,0 +1,22 @@
+// @flow
+import { type Change, type Range } from 'slate';
+import type Options from '../../options';
+import isSameCell from '../utils/isSameCell';
+
+function inSameCell(
+    opts: Options,
+    change: Change,
+    range: Range,
+    next: () => Change
+): Change {
+    const { startKey, endKey } = range;
+    if (startKey === endKey) {
+        return change.deleteAtRange(range);
+    }
+    const { document } = change.value;
+    if (isSameCell(opts, document, startKey, endKey)) {
+        return change.deleteAtRange(range);
+    }
+    return next();
+}
+export default inSameCell;

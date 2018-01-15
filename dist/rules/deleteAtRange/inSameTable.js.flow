@@ -1,0 +1,64 @@
+// @flow
+import { type Change, type Range } from 'slate';
+import type Options from '../../options';
+import isSameTable from '../utils/isSameTable';
+import removeAllTextsInCell from '../utils/removeAllTextsInCell';
+import removeTextsFromStart from '../utils/removeTextsFromStart';
+import removeTextsFromEnd from '../utils/removeTextsFromEnd';
+
+function inSameTable(
+    opts: Options,
+    change: Change,
+    range: Range,
+    next: () => Change
+): Change {
+    const { startKey, endKey } = range;
+    const { document } = change.value;
+
+    if (!isSameTable(opts, document, startKey, endKey)) {
+        return next();
+    }
+
+    const startBlock = document.getClosest(
+        startKey,
+        cell => cell && cell.object === 'block'
+    );
+    const endBlock = document.getClosest(
+        endKey,
+        cell => cell && cell.object === 'block'
+    );
+    const table = document.getAncestors(startBlock).get(-2);
+    const startRow = table.getParent(startBlock.key);
+    const endRow = table.getParent(endBlock.key);
+
+    change.snapshotSelection();
+
+    const rowsInRange = table.nodes
+        .skipUtil(x => x === startRow)
+        .skip(1)
+        .takeUntil(x => x === endRow)
+        .skipLast(1);
+    rowsInRange.forEach((rowBlock, index) => {
+        change.removeNodeByKey(rowBlock.key);
+        return index;
+    });
+    startRow.nodes
+        .skipUnitil(x => x === startBlock)
+        .skip(1)
+        .forEach((cellBlock, index) => {
+            removeAllTextsInCell(change, cellBlock);
+            return index;
+        });
+    endRow.nodes
+        .takeUnitil(x => x === endBlock)
+        .skipLast(1)
+        .forEach((cellBlock, index) => {
+            removeAllTextsInCell(change, cellBlock);
+            return index;
+        });
+    removeTextsFromStart(change, range);
+    removeTextsFromEnd(change, range);
+
+    return change;
+}
+export default inSameTable;

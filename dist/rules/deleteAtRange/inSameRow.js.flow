@@ -1,0 +1,54 @@
+// @flow
+import { type Change, Range } from 'slate';
+import type Options from '../../options';
+import isSameRow from '../utils/isSameRow';
+import removeAllTextsInCell from '../utils/removeAllTextsInCell';
+
+function inSameRow(
+    opts: Options,
+    change: Change,
+    range: Range,
+    next: () => Change
+): Change {
+    const { startKey, endKey } = range;
+    const { document } = change.value;
+
+    if (!isSameRow(opts, document, startKey, endKey)) {
+        return next();
+    }
+
+    const startBlock = document.getClosest(
+        startKey,
+        cell => cell && cell.object === 'block'
+    );
+    const endBlock = document.getClosest(
+        endKey,
+        cell => cell && cell.object === 'block'
+    );
+
+    // Snapshot the selection, which creates an extra undo save point, so that
+    // when you undo a delete, the expanded selection will be retained.
+    change.snapshotSelection();
+    const blocks = document.getBlocksAtRange(range);
+    blocks.forEach((block, index) => {
+        if (block === startBlock) {
+            const cellRange = Range.create
+                .moveFocusToEndOf(block)
+                .moveAnchorTo(startKey, range.startOffset);
+            change.deleteAtRange(cellRange);
+            return index;
+        }
+        if (block === endBlock) {
+            const cellRange = Range.create
+                .moveAnchorToStartOf(block)
+                .moveFocusTo(endKey, range.endOffset);
+            change.deleteAtRange(cellRange);
+            return index;
+        }
+        removeAllTextsInCell(change, block);
+        return index;
+    });
+    return change;
+}
+
+export default inSameRow;
